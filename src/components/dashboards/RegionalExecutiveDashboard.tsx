@@ -5,6 +5,7 @@ import { OromiaGisMap } from '../gis/OromiaGisMap';
 import { GaugeChart } from '../charts/Charts';
 import { Sparkline } from '../charts/Sparkline';
 import { HistoricalTrendChart } from './HistoricalTrendChart';
+import oromiaLogo from '../../assets/logo.png';
 import {
   Wheat,
   Activity,
@@ -243,9 +244,12 @@ export const RegionalExecutiveDashboard: React.FC<Props> = ({
           <div className="max-w-3xl space-y-2">
             <div className="flex items-center gap-3">
               <img
-                src="/public/assets/aistudio/image_796fd388.png"
+                src={oromiaLogo}
                 alt="Biiroo Qonnaa Oromiyaa"
                 className="h-14 w-auto object-contain bg-white/95 p-1 rounded-lg shadow-md shrink-0"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/logo.png';
+                }}
               />
               <div>
                 <div className="flex items-center gap-2 text-[11px] font-mono text-emerald-400">

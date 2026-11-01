@@ -33,7 +33,9 @@ import { HarvestMarketingDashboard } from './components/dashboards/HarvestMarket
 import { ExtensionEmploymentRiskDashboard } from './components/dashboards/ExtensionEmploymentRiskDashboard';
 import { AdvancedAnalyticsDashboard } from './components/dashboards/AdvancedAnalyticsDashboard';
 import { AdminKoboPanel } from './components/admin/AdminKoboPanel';
+import { AdminAuthGate } from './components/admin/AdminAuthGate';
 import { generateExecutivePdfReport } from './utils/pdfReportGenerator';
+import oromiaLogo from './assets/logo.png';
 
 // Icons
 import {
@@ -51,7 +53,7 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  const [lang, setLang] = useState<Language>('om'); // default to Afaan Oromoo as per BOA files
+  const [lang, setLang] = useState<Language>('en'); // default interface language English as requested
   const [activeTab, setActiveTab] = useState<DashboardTab>('regional_exec');
   const [selectedZoneFilter, setSelectedZoneFilter] = useState<number | 'all'>('all');
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -132,9 +134,12 @@ export default function App() {
             className="flex items-center gap-3 text-left whitespace-nowrap shrink-0 group cursor-pointer"
           >
             <img
-              src="/public/assets/aistudio/image_796fd388.png"
+              src={oromiaLogo}
               alt="Biiroo Qonnaa Oromiyaa - Oromia Bureau of Agriculture"
               className="h-11 w-auto max-w-[110px] object-contain shrink-0 drop-shadow-sm rounded"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = '/logo.png';
+              }}
             />
             <div className="hidden sm:block">
               <span className="text-base font-extrabold tracking-tight text-slate-900 dark:text-slate-100 block leading-tight">
@@ -392,13 +397,15 @@ export default function App() {
         )}
 
         {activeTab === 'admin_kobo' && (
-          <AdminKoboPanel
-            zones={zones}
-            schemes={schemes}
-            onUpdateZones={handleUpdateZones}
-            onUpdateSchemes={handleUpdateSchemes}
-            lang={lang}
-          />
+          <AdminAuthGate lang={lang}>
+            <AdminKoboPanel
+              zones={zones}
+              schemes={schemes}
+              onUpdateZones={handleUpdateZones}
+              onUpdateSchemes={handleUpdateSchemes}
+              lang={lang}
+            />
+          </AdminAuthGate>
         )}
       </main>
 
@@ -407,9 +414,12 @@ export default function App() {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-3">
             <img
-              src="/public/assets/aistudio/image_796fd388.png"
+              src={oromiaLogo}
               alt="Oromia Bureau of Agriculture"
               className="h-8 w-auto object-contain shrink-0 drop-shadow-sm"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = '/logo.png';
+              }}
             />
             <div>
               <span className="font-semibold text-slate-800 dark:text-slate-200 block">
