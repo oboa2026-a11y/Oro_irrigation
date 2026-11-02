@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Language } from '../../types';
 import oromiaLogo from '../../assets/logo.png';
+import { fetchServerAdminPassword, saveServerAdminPassword } from '../../services/campaignStorageService';
 import {
   Lock,
   Mail,
@@ -63,6 +64,19 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({ children, lang }) 
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [simulatedEmailSent, setSimulatedEmailSent] = useState(false);
+
+  // Sync custom password from server on mount
+  useEffect(() => {
+    fetchServerAdminPassword().then((pwd) => {
+      if (pwd) {
+        try {
+          localStorage.setItem(PASSWORD_STORAGE_KEY, pwd);
+        } catch (err) {
+          console.warn('Could not write server password to localStorage', err);
+        }
+      }
+    });
+  }, []);
 
   // Helper to get active password
   const getCurrentPassword = (): string => {
@@ -196,6 +210,7 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({ children, lang }) 
     try {
       localStorage.setItem(PASSWORD_STORAGE_KEY, newPasswordInput);
       sessionStorage.setItem(AUTH_STORAGE_KEY, 'true');
+      saveServerAdminPassword(newPasswordInput).catch((e) => console.warn('Could not sync password to server:', e));
     } catch (err) {
       console.warn('Could not save new password to localStorage', err);
     }

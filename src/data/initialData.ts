@@ -1698,6 +1698,9 @@ export const LOCAL_STORAGE_KEY_KOBO = 'oromia_wheat_kobo_config_v2';
 
 export function loadSavedZones(): ZoneRecord[] {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return INITIAL_ZONES;
+    }
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY_ZONES);
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -1733,7 +1736,9 @@ export function loadSavedZones(): ZoneRecord[] {
 
 export function saveZonesToStorage(zones: ZoneRecord[]): void {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY_ZONES, JSON.stringify(zones));
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(LOCAL_STORAGE_KEY_ZONES, JSON.stringify(zones));
+    }
   } catch (e) {
     console.error('Failed to save zones to localStorage:', e);
   }
@@ -1741,6 +1746,9 @@ export function saveZonesToStorage(zones: ZoneRecord[]): void {
 
 export function loadSavedSchemes(): IrrigationScheme[] {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return INITIAL_SCHEMES;
+    }
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY_SCHEMES);
     if (raw) return JSON.parse(raw);
   } catch (e) {
@@ -1751,7 +1759,9 @@ export function loadSavedSchemes(): IrrigationScheme[] {
 
 export function saveSchemesToStorage(schemes: IrrigationScheme[]): void {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY_SCHEMES, JSON.stringify(schemes));
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(LOCAL_STORAGE_KEY_SCHEMES, JSON.stringify(schemes));
+    }
   } catch (e) {
     console.error('Failed to save schemes to localStorage:', e);
   }

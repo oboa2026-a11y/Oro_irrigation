@@ -35,6 +35,12 @@ import { AdvancedAnalyticsDashboard } from './components/dashboards/AdvancedAnal
 import { AdminKoboPanel } from './components/admin/AdminKoboPanel';
 import { AdminAuthGate } from './components/admin/AdminAuthGate';
 import { generateExecutivePdfReport } from './utils/pdfReportGenerator';
+import {
+  fetchCampaignDataFromServer,
+  saveZonesToServer,
+  saveSchemesToServer,
+  checkServerStatus,
+} from './services/campaignStorageService';
 import oromiaLogo from './assets/logo.png';
 
 // Icons
@@ -49,8 +55,12 @@ import {
   ChevronDown,
   Filter,
   FileDown,
+  FileSpreadsheet,
   Loader2,
+  RefreshCw,
+  Cloud,
 } from 'lucide-react';
+import { exportCampaignDataToCsv } from './utils/csvExport';
 
 export default function App() {
   const [lang, setLang] = useState<Language>('en'); // default interface language English as requested
@@ -71,15 +81,119 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  // Handle plan updates from Admin panel
+  // Multi-device server synchronization state
+  const [serverVersion, setServerVersion] = useState<number>(0);
+  const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
+  const [lastSyncedText, setLastSyncedText] = useState<string>('Live');
+
+  // 1. Initial shared fetch from server on load (ensures any PC opening the link gets current data)
+  useEffect(() => {
+    let isMounted = true;
+    const initServerData = async () => {
+      setIsCloudSyncing(true);
+      const data = await fetchCampaignDataFromServer();
+      if (isMounted && data && Array.isArray(data.zones) && data.zones.length > 0) {
+        setZones(data.zones);
+        saveZonesToStorage(data.zones);
+        if (Array.isArray(data.schemes) && data.schemes.length > 0) {
+          setSchemes(data.schemes);
+          saveSchemesToStorage(data.schemes);
+        }
+        setServerVersion(data.version);
+        setLastSyncedText(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      }
+      if (isMounted) setIsCloudSyncing(false);
+    };
+
+    initServerData();
+    return () => { isMounted = false; };
+  }, []);
+
+  // 2. Automated background sync & window focus listener so other PCs' updates load seamlessly
+  useEffect(() => {
+    let isMounted = true;
+
+    const pullUpdatesIfNeeded = async () => {
+      try {
+        const st = await checkServerStatus();
+        if (!st) return;
+        if (st.version > serverVersion) {
+          setIsCloudSyncing(true);
+          const data = await fetchCampaignDataFromServer();
+          if (isMounted && data && Array.isArray(data.zones)) {
+            setZones(data.zones);
+            saveZonesToStorage(data.zones);
+            if (Array.isArray(data.schemes)) {
+              setSchemes(data.schemes);
+              saveSchemesToStorage(data.schemes);
+            }
+            setServerVersion(data.version);
+            setLastSyncedText(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          }
+          if (isMounted) setIsCloudSyncing(false);
+        }
+      } catch (err) {
+        console.warn('Sync check error:', err);
+      }
+    };
+
+    const interval = setInterval(pullUpdatesIfNeeded, 5000);
+    const handleFocus = () => { pullUpdatesIfNeeded(); };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [serverVersion]);
+
+  // Handle plan updates from Admin panel - saves to server so ALL other PCs get changes
   const handleUpdateZones = (newZones: ZoneRecord[]) => {
     setZones(newZones);
     saveZonesToStorage(newZones);
+    setIsCloudSyncing(true);
+    saveZonesToServer(newZones)
+      .then(async (ok) => {
+        if (ok) {
+          const st = await checkServerStatus();
+          if (st) setServerVersion(st.version);
+          setLastSyncedText(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        }
+      })
+      .finally(() => setIsCloudSyncing(false));
   };
 
   const handleUpdateSchemes = (newSchemes: IrrigationScheme[]) => {
     setSchemes(newSchemes);
     saveSchemesToStorage(newSchemes);
+    setIsCloudSyncing(true);
+    saveSchemesToServer(newSchemes)
+      .then(async (ok) => {
+        if (ok) {
+          const st = await checkServerStatus();
+          if (st) setServerVersion(st.version);
+          setLastSyncedText(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        }
+      })
+      .finally(() => setIsCloudSyncing(false));
+  };
+
+  // Manual Trigger to refresh shared data immediately
+  const handleManualSync = async () => {
+    setIsCloudSyncing(true);
+    const data = await fetchCampaignDataFromServer();
+    if (data && Array.isArray(data.zones) && data.zones.length > 0) {
+      setZones(data.zones);
+      saveZonesToStorage(data.zones);
+      if (Array.isArray(data.schemes) && data.schemes.length > 0) {
+        setSchemes(data.schemes);
+        saveSchemesToStorage(data.schemes);
+      }
+      setServerVersion(data.version);
+      setLastSyncedText(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    }
+    setIsCloudSyncing(false);
   };
 
   // Filtered dataset if user picks a specific zone
@@ -116,6 +230,20 @@ export default function App() {
         setIsGeneratingPdf(false);
       }
     }, 60);
+  };
+
+  // CSV Data Export for offline record keeping
+  const handleExportCsv = () => {
+    try {
+      exportCampaignDataToCsv({
+        zones: displayedZones,
+        schemes: displayedSchemes,
+        lang,
+        selectedZoneFilter,
+      });
+    } catch (err) {
+      console.error('Failed to export CSV campaign records:', err);
+    }
   };
 
   return (
@@ -283,6 +411,21 @@ export default function App() {
               </select>
             </div>
 
+            {/* Live Server Sync Status across all PCs & Devices */}
+            <button
+              onClick={handleManualSync}
+              disabled={isCloudSyncing}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors cursor-pointer"
+              title={lang === 'om' ? 'Ragaa sarvaraa waliin wal-simsiisi (PC hundaaf)' : 'Sync live data across all PCs & devices'}
+            >
+              <RefreshCw className={`w-3 h-3 ${isCloudSyncing ? 'animate-spin text-emerald-600' : 'text-emerald-500'}`} />
+              <span className="hidden sm:inline">
+                {isCloudSyncing
+                  ? (lang === 'om' ? 'Wal-simsiisaa...' : 'Syncing...')
+                  : (lang === 'om' ? `Sarvara: ${lastSyncedText}` : `Cloud Sync: ${lastSyncedText}`)}
+              </span>
+            </button>
+
             {/* Language Switcher */}
             <button
               onClick={() => setLang(lang === 'om' ? 'en' : 'om')}
@@ -315,6 +458,16 @@ export default function App() {
                 <FileDown className="w-3.5 h-3.5" />
               )}
               <span>PDF</span>
+            </button>
+
+            {/* CSV Data Export for Offline Record Keeping */}
+            <button
+              onClick={handleExportCsv}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-teal-50 dark:bg-teal-950/50 hover:bg-teal-100 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200/60 dark:border-teal-800/60 transition-colors cursor-pointer"
+              title={lang === 'om' ? 'Ragaa CSV Buufadhu (Offline kuusuuf)' : 'Export all current zone and scheme data to CSV for offline records'}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>CSV</span>
             </button>
 
             {/* Print / Export Report */}
